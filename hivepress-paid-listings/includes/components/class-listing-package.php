@@ -86,6 +86,30 @@ final class Listing_Package extends Component {
 	}
 
 	/**
+	 * Filters packages by categories.
+	 *
+	 * @param array $packages Packages or user packages.
+	 * @param array $category_ids Category IDs.
+	 * @return array
+	 */
+	public function filter_packages( $packages, $category_ids ) {
+		return array_filter(
+			$packages,
+			function( $package ) use ( $category_ids ) {
+
+				// Get category IDs.
+				$package_category_ids = (array) $package->get_categories__id();
+
+				foreach ( $package_category_ids as $package_category_id ) {
+					$package_category_ids = array_merge( $package_category_ids, get_term_children( $package_category_id, 'hp_listing_category' ) );
+				}
+
+				return ! $package_category_ids || array_intersect( (array) $category_ids, $package_category_ids );
+			}
+		);
+	}
+
+	/**
 	 * Updates user packages.
 	 *
 	 * @param int    $listing_id Listing ID.
@@ -102,21 +126,6 @@ final class Listing_Package extends Component {
 		// Get listing.
 		$listing = Models\Listing::query()->get_by_id( $listing_id );
 
-		// Update listing status.
-		if ( 'draft' === $old_status ) {
-			if ( 'pending' === $new_status && $listing->get_expired_time() && $listing->get_expired_time() < time() ) {
-				update_post_meta( $listing_id, 'hp_moderated', 1 );
-
-				$listing->set_status( 'draft' )->save_status();
-
-				return;
-			} elseif ( 'publish' === $new_status && get_post_meta( $listing_id, 'hp_moderated', true ) ) {
-				delete_post_meta( $listing_id, 'hp_moderated' );
-
-				$listing->set_status( 'pending' )->save_status();
-			}
-		}
-
 		// Get user packages.
 		$user_packages = Models\User_Listing_Package::query()->filter(
 			[
@@ -126,12 +135,7 @@ final class Listing_Package extends Component {
 		->get()->serialize();
 
 		// Filter user packages.
-		$user_packages = array_filter(
-			$user_packages,
-			function( $user_package ) use ( $listing ) {
-				return ! $user_package->get_categories__id() || array_intersect( (array) $listing->get_categories__id(), $user_package->get_categories__id() );
-			}
-		);
+		$user_packages = $this->filter_packages( $user_packages, $listing->get_categories__id() );
 
 		if ( empty( $user_packages ) ) {
 			return;
@@ -523,18 +527,16 @@ final class Listing_Package extends Component {
 		if ( $package && $package->is_primary() ) {
 
 			// Add class.
-			$blocks = hp\merge_trees(
-				[ 'blocks' => $blocks ],
+			$blocks = hivepress()->template->merge_blocks(
+				$blocks,
 				[
-					'blocks' => [
-						'listing_package_container' => [
-							'attributes' => [
-								'class' => [ 'hp-listing-package--primary' ],
-							],
+					'listing_package_container' => [
+						'attributes' => [
+							'class' => [ 'hp-listing-package--primary' ],
 						],
 					],
 				]
-			)['blocks'];
+			);
 		}
 
 		return $blocks;
@@ -548,17 +550,15 @@ final class Listing_Package extends Component {
 	 */
 	public function alter_listing_edit_block( $template ) {
 		if ( hp\is_plugin_active( 'woocommerce' ) && get_option( 'hp_product_listing_feature' ) ) {
-			$template = hp\merge_trees(
+			$template = hivepress()->template->merge_blocks(
 				$template,
 				[
-					'blocks' => [
-						'listing_actions_primary' => [
-							'blocks' => [
-								'listing_feature_link' => [
-									'type'   => 'part',
-									'path'   => 'listing/edit/block/listing-feature-link',
-									'_order' => 5,
-								],
+					'listing_actions_primary' => [
+						'blocks' => [
+							'listing_feature_link' => [
+								'type'   => 'part',
+								'path'   => 'listing/edit/block/listing-feature-link',
+								'_order' => 5,
 							],
 						],
 					],
@@ -577,17 +577,15 @@ final class Listing_Package extends Component {
 	 */
 	public function alter_listing_edit_page( $template ) {
 		if ( hp\is_plugin_active( 'woocommerce' ) && get_option( 'hp_product_listing_feature' ) ) {
-			$template = hp\merge_trees(
+			$template = hivepress()->template->merge_blocks(
 				$template,
 				[
-					'blocks' => [
-						'listing_actions_secondary' => [
-							'blocks' => [
-								'listing_feature_link' => [
-									'type'   => 'part',
-									'path'   => 'listing/edit/page/listing-feature-link',
-									'_order' => 10,
-								],
+					'listing_actions_secondary' => [
+						'blocks' => [
+							'listing_feature_link' => [
+								'type'   => 'part',
+								'path'   => 'listing/edit/page/listing-feature-link',
+								'_order' => 10,
 							],
 						],
 					],

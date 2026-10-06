@@ -77,6 +77,11 @@ final class Listing_Package extends Controller {
 			$args
 		);
 
+		// Remove routes that conflict with Memberships.
+		if ( ! hp\is_plugin_active( 'woocommerce' ) || ! get_option( 'hp_product_listing_feature' ) ) {
+			unset( $args['routes']['listing_feature_page'], $args['routes']['listing_feature_complete_page'] );
+		}
+
 		parent::__construct( $args );
 	}
 
@@ -167,10 +172,8 @@ final class Listing_Package extends Controller {
 			$package_ids = [];
 
 			// Add IDs.
-			foreach ( $package_query->get() as $package ) {
-				if ( ! $package->get_categories__id() || array_intersect( (array) $listing->get_categories__id(), $package->get_categories__id() ) ) {
-					$package_ids[] = $package->get_id();
-				}
+			foreach ( hivepress()->listing_package->filter_packages( $package_query->get()->serialize(), $listing->get_categories__id() ) as $package ) {
+				$package_ids[] = $package->get_id();
 			}
 
 			// Cache IDs.
@@ -194,12 +197,7 @@ final class Listing_Package extends Controller {
 		)->get()->serialize();
 
 		// Filter user packages.
-		$user_packages = array_filter(
-			$user_packages,
-			function( $user_package ) use ( $listing ) {
-				return ! $user_package->get_categories__id() || array_intersect( (array) $listing->get_categories__id(), $user_package->get_categories__id() );
-			}
-		);
+		$user_packages = hivepress()->listing_package->filter_packages( $user_packages, $listing->get_categories__id() );
 
 		// Check submission limit.
 		if ( array_sum(
